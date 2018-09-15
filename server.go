@@ -18,8 +18,25 @@ type Ticker struct {
 	Symbol string `json:"symbol"`
 }
 
-var tickerSymbolDict = map[string]string{}
+type TickerDetails struct {
+	Data TickerDetail `json:"data"`
+}
 
+type TickerDetail struct {
+	Qoutes QouteJson `json:"quotes"`
+}
+
+type QouteJson struct {
+	USD USDJson `json:"USD"`
+}
+
+type USDJson struct {
+	PC float32 `json:"percent_change_1h"`
+}
+
+var tickerSymbolDict = map[string]Ticker{}
+
+//TODO: handle errors properly
 func getTickerList() {
 	url := "https://api.coinmarketcap.com/v2/listings/"
 	res, _ := http.Get(url)
@@ -31,26 +48,32 @@ func getTickerList() {
 		fmt.Println(err)
 	} else {
 		for _, v := range tickers.Data {
-			tickerSymbolDict[v.Symbol] = fmt.Sprint(v.Id)
-			fmt.Println(v.Symbol, v.Id)
+			tickerSymbolDict[v.Symbol] = v
 		}
 	}
 }
 
-func getTickerChange(id string) string {
-	url := "https://api.coinmarketcap.com/v2/ticker/" + id + "/"
-	fmt.Println(url)
+func getTickerChange(id int) float32 {
+	url := fmt.Sprint("https://api.coinmarketcap.com/v2/ticker/", id, "/")
 	res, _ := http.Get(url)
 	defer res.Body.Close()
 	content, _ := ioutil.ReadAll(res.Body)
-	return string(content)
+	var detail TickerDetails
+	err := json.Unmarshal(content, &detail)
+	if err != nil {
+		fmt.Println(err)
+	}
+	return detail.Data.Qoutes.USD.PC
 }
 
 func compareHandler(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	if p1, p2 := q.Get("ticker_symbol_1"), q.Get("ticker_symbol_2"); tickerSymbolDict[p1] != "" && tickerSymbolDict[p2] != "" {
-		fmt.Fprintf(w, getTickerChange(tickerSymbolDict[p1]))
-		fmt.Fprintf(w, getTickerChange(tickerSymbolDict[p2]))
+	if p1, p2 := q.Get("ticker_symbol_1"), q.Get("ticker_symbol_2"); tickerSymbolDict[p1].Id > 0 && tickerSymbolDict[p2].Id > 0 {
+		if t1, t2 := tickerSymbolDict[p1], tickerSymbolDict[p2]; getTickerChange(t1.Id) > getTickerChange(t2.Id) {
+			fmt.Fprintf(w, t1.Name)
+		} else {
+			fmt.Fprintf(w, t2.Name)
+		}
 	} else {
 		http.Error(w, "Bad request", 400)
 	}
