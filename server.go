@@ -1,18 +1,40 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
 )
 
-var tickerSymbolDict = map[string]string{
-	"BTC": "1",
-	"ETH": "1027",
-	"XRP": "52",
-	"LTC": "2",
-	"BCH": "1831",
+type Tickers struct {
+	Data []Ticker `json:"data"`
+}
+
+type Ticker struct {
+	Id     int    `json:"id"`
+	Name   string `json:"name"`
+	Symbol string `json:"symbol"`
+}
+
+var tickerSymbolDict = map[string]string{}
+
+func getTickerList() {
+	url := "https://api.coinmarketcap.com/v2/listings/"
+	res, _ := http.Get(url)
+	defer res.Body.Close()
+	content, _ := ioutil.ReadAll(res.Body)
+	var tickers Tickers
+	err := json.Unmarshal(content, &tickers)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		for _, v := range tickers.Data {
+			tickerSymbolDict[v.Symbol] = fmt.Sprint(v.Id)
+			fmt.Println(v.Symbol, v.Id)
+		}
+	}
 }
 
 func getTickerChange(id string) string {
@@ -35,6 +57,7 @@ func compareHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	getTickerList()
 	http.HandleFunc("/compare", compareHandler)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
